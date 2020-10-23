@@ -4,20 +4,25 @@ library(stringr)
 library(biomaRt)
 
 dataset <- "c:/Users/abhmalat/OneDrive - Indiana University/RI cBioPortal/PEDS_brrhelm/TREEHOUSE"
-cbio_study <- "c:/Users/abhmalat/OneDrive - Indiana University/cbio_PEDS/study"
+cbio_study <- "c:/Users/abhmalat/OneDrive - Indiana University/cbio_PEDSTreehouse/study"
 
 setwd(dataset)
 
-raw_genes <- read.csv(file="TumorCompendium_v11_PolyA_hugo_log2tpm_58581genes_2020-04-09.tsv",
-                     sep = "\t", header = FALSE, na = "NA")
+raw_genes_old <- read.csv(file="TumorCompendium_v11_PolyA_hugo_log2tpm_58581genes_2020-04-09.tsv",
+                     sep = "\t", header = FALSE, na = "NA", nrows = 1000)
 
-colnames(raw_genes)[1] <- "Hugo_Symbol"
+colnames(raw_genes_old)[1] <- "Hugo_Symbol"
 
 ensembl <- useMart(host = 'grch37.ensembl.org',
                    biomart = 'ENSEMBL_MART_ENSEMBL',
                    dataset = 'hsapiens_gene_ensembl')
+hugo <- raw_genes$Hugo_Symbol[2:nrow(raw_genes)]
+entrez <- getBM(c("hgnc_symbol", "entrezgene_id"), filters = "hgnc_symbol", values = raw_genes_old$Hugo_Symbol[2:nrow(raw_genes_old)], mart = ensembl, verbose = TRUE)
 
-entrez <- getBM(c("hgnc_symbol", "entrezgene_id"), filters = "hgnc_symbol", values = raw_genes$Hugo_Symbol[2:nrow(raw_genes)], ensembl)
+syn <- unique(raw_genes$Hugo_Symbol[2:nrow(raw_genes)])
+
+synonym <- getBM(c("external_synonym", "hgnc_symbol"), filters = "external_synonym",
+                values = syn, ensembl)
 
 entrez[, "hgnc_symbol"] <- as.factor(entrez[, "hgnc_symbol"])
 
@@ -31,6 +36,8 @@ genes_with_entrez[1, "Hugo_Symbol"] <- "Hugo_Symbol"
 genes_with_entrez[1, "Entrez_Gene_Id"] <- "Entrez_Gene_Id"
 
 genes_final <- genes_with_entrez %>% dplyr::select(Hugo_Symbol, Entrez_Gene_Id, everything())
+
+genes_final <- unique(genes_final)
 
 setwd(cbio_study)
 rnaDataFile <- "data_expression_rnaseq.txt"
@@ -55,13 +62,34 @@ writeLines(c(
   "stable_id: rna_seq_mrna",
   "show_profile_in_analysis_tab: false",
   "profile_name: mRNA expression",
-  "profile_description: RNA Gene Expression Log2TPM",
+  "profile_description: RNA Gene Expression Log2TPM [Continuous]",
   paste("data_filename: ", rnaDataFile)
 ), f
 )
 close(f)
 print("RNA Expression metafile completed")
 
+sampleIds <- raw_genes[1, 2:ncol(raw_genes)]
+rnaCaseListFile <- "cases_rna_seq_mrna.txt"
+
+setwd('case_lists')
+
+if (file.exists(rnaCaseListFile)) {
+  file.remove(rnaCaseListFile)
+}
+file.create(rnaCaseListFile)
+
+f <- file(rnaCaseListFile)
+writeLines(c(
+  "cancer_study_identifier: peds_treehouse",
+  "stable_id: peds_treehouse_rna_seq_mrna",
+  "case_list_name: RNA Seq Log2TPM",
+  "case_list_description: RNA Seq Log2TPM [Continuous]",
+  paste("case_list_ids: ", paste(sampleIds, collapse = '\t'))
+), f
+)
+close(f)
+print("Case lists completed")
 
 #raw_clinical <- read.csv(file = "clinical_TumorCompendium_v11_PolyA_2020-04-09.tsv",
 #                         sep = "\t", header = TRUE, na.strings = c("N/A", "", "unavailable"))

@@ -78,6 +78,21 @@ header <- data.frame(nantomics_patient_uuid = c("#Nantomics Patient ID", "#Nanto
 
 sample_final <- rbind(header,sample_names[complete.cases(sample_names), ])
 
+##########################################################################
+# Generate missing mapping samples list for Bryan
+#setwd(study)
+#samplesFile <- "data_clinical_sample_missing.txt"
+#
+#if(file.exists(samplesFile))
+#  file.remove(samplesFile)
+#file.create(samplesFile)
+#
+## Write to file
+#write.table(as.data.frame(sample_names[!(complete.cases(sample_names)), "sample_id"]), samplesFile, sep="\t", col.names = TRUE, row.names = FALSE,
+#            quote = FALSE, append = TRUE, na = "NA")
+##########################################################################
+
+
 setwd(study)
 samplesFile <- "data_clinical_sample.txt"
 

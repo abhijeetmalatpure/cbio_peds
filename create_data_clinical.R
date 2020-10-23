@@ -8,7 +8,7 @@ library(biomaRt)
 library(data.table)
 
 dataset <- "c:/Users/abhmalat/OneDrive - Indiana University/RI cBioPortal/PEDS_brrhelm/TREEHOUSE"
-cbio_code <- "c:/Users/abhmalat/OneDrive - Indiana University/cbio_PEDS/study"
+cbio_code <- "c:/Users/abhmalat/OneDrive - Indiana University/cbio_PEDSTreehouse/study"
 
 setwd(dataset)
 
@@ -93,21 +93,30 @@ samples <- clinical[, c("patient_id", "sample_id", "th_sampleid", "site_donor_id
 
 samples$dataset_accession <- ifelse(samples$dataset_accession == 'unavailable', NA, samples$dataset_accession)
 
-samples$CANCER_TYPE <- samples$disease
-samples$CANCER_TYPE <- ifelse(samples$disease %like% "carcinoma", "Carcinoma", samples$CANCER_TYPE)
-samples$CANCER_TYPE <- ifelse(samples$disease %like% "leukemia", "Leukemia", samples$CANCER_TYPE)
-samples$CANCER_TYPE <- ifelse(samples$disease %like% "sarcoma", "Sarcoma", samples$CANCER_TYPE)
+# Get Waqas' mapping doc
+setwd(dataset)
+cancer_types <- read.csv('cancer_type.csv', sep=',', header = TRUE, na.strings = "")
+
+cancer_types <- cancer_types[,c("CANCER_SUBTYPES", "CANCER_TYPE", "CANCER_TYPE_Tumor.Site")]
+names(cancer_types) <- gsub("CANCER_TYPE_Tumor.Site","METASTATIC_SITE", names(cancer_types))
+
+samples <- left_join(samples, cancer_types, by= c("disease" = "CANCER_SUBTYPES"))
+
+# Capitalize first letter
+samples[,c("disease", "CANCER_TYPE", "METASTATIC_SITE")] <- sapply(samples[,c("disease", "CANCER_TYPE", "METASTATIC_SITE")], stringr::str_to_title)
 
 header <- data.frame(patient_id = c("#Patient ID", "#Patient ID", "#STRING", "#1", "PATIENT_ID"),
                      sample_id = c("Sample ID", "Sample ID", "STRING", "1", "SAMPLE_ID"),
                      th_sampleid = c("Treehouse Sample ID", "Treehouse Sample ID", "STRING", "1", "TH_SAMPLE_ID"),
                      CANCER_TYPE = c("Cancer Type", "Cancer Type", "STRING", "1", "CANCER_TYPE"),
                      disease = c("Cancer Sub-type", "Cancer Sub-type", "STRING", "1", "CANCER_TYPE_DETAILED"),
+                     METASTATIC_SITE = c("Site of Tumor", "Site of Tumor", "STRING", "1", "METASTATIC_SITE"),
                      site_sampleid = c("Site Sample ID", "Site Sample ID", "STRING", "1", "SITE_SAMPLE_ID"),
                      dataset_accession = c("Dataset Accession", "Dataset Accession", "STRING", "1", "DATASET_ACCESSION"))
 
-sample_final <- rbind(header, samples %>% dplyr::select(c("patient_id", "sample_id", "th_sampleid", "CANCER_TYPE", "disease", "site_sampleid", "dataset_accession")))
+sample_final <- rbind(header, samples %>% dplyr::select(c("patient_id", "sample_id", "th_sampleid", "CANCER_TYPE", "disease", "METASTATIC_SITE", "site_sampleid", "dataset_accession")))
 
+setwd(cbio_code)
 samplesFile <- "data_clinical_sample.txt"
 
 if(file.exists(samplesFile))
