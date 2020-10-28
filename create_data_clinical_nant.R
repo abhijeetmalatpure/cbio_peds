@@ -12,32 +12,50 @@ library(config)
 dataset <- "c:/Users/abhmalat/OneDrive - Indiana University/RI cBioPortal/PEDS_brrhelm"
 clinical <- "c:/Users/abhmalat/OneDrive - Indiana University/RI cBioPortal/PEDS_brrhelm/mapping"
 study <- "c:/Users/abhmalat/OneDrive - Indiana University/cbio_PEDSNantomics/study"
+exporter <- "c:/Users/abhmalat/OneDrive - Indiana University/cbio_PEDSNantomics/cbioOutput"
 
 setwd(clinical)
 
 # Header file was separate
-clinical_header <- read.csv(file = "dt_matched_patient_info_pst_nantomics_2020_1014a_pst_files_per_patient_listing_field_names.tsv", sep=",", header=FALSE)
+clinical_header <- read.csv(file = "dt_matched_patient_info_pst_nantomics_2020_1026a_mapped_to_cioportal_ids_fields_names.txt", sep=",", header=FALSE)
 
-raw_clinical <- read.csv(file = "dt_matched_patient_info_pst_nantomics_2020_1014a_pst_files_per_patient_listing.tsv",
+raw_clinical <- read.csv(file = "dt_matched_patient_info_pst_nantomics_2020_1026a_mapped_to_cioportal_ids.tsv",
                          sep = "|", header = FALSE, na.strings = c("N/A", ""))
+
+setwd(exporter)
+exporter <- read.csv(file = "data_clinical_patient_NANTOMICS_PST.txt",
+                         sep = "\t", header = FALSE, na.strings = c("N/A", ""))
+
+exporter_header <- exporter[1:5,]
+exporter_clinical <- as.data.frame(exporter[6:nrow(exporter),])
+colnames(exporter_clinical) <- exporter_header[5,]
+
 names(raw_clinical) <- clinical_header$V1
 
-# Final clinical data DF
-header <- data.frame(nantomics_patient_uuid = c("#Nantomics Patient ID", "#Nantomics Patient ID", "#STRING", "#1", "PATIENT_ID"),
-                     phc_patient_uuid = c("PHC Patient ID", "PHC Patient ID", "STRING", "1", "PHC_PATIENT_ID"),
-                     phc_subject_id = c("Patient Subject ID", "Patient Subject ID in REDCap", "STRING", "1", "PHC_SUBJECT_ID"))
+clinical_combined <- left_join(raw_clinical, exporter_clinical, by = c("cbioportal_patient_id" = "PATIENT_ID"))
 
-clinical_final <- rbind(header, unique(raw_clinical %>% dplyr::select(c("nantomics_patient_uuid", "phc_patient_uuid", "phc_subject_id"))))
+# Final clinical data DF
+header <- cbind(exporter_header,
+                data.frame(nantomics_patient_uuid = c("Nantomics Patient ID", "Nantomics Patient ID", "STRING", "1", "NANTOMICS_PATIENT_ID"),
+                     phc_patient_uuid = c("PHC Patient ID", "PHC Patient ID", "STRING", "1", "PHC_PATIENT_ID"),
+                     phc_subject_id = c("Patient Subject ID", "Patient Subject ID in REDCap", "STRING", "1", "PHC_SUBJECT_ID")))
+
+
+clinical_final <- .rbind.data.table(header,
+                        unique(clinical_combined %>%
+                                 dplyr::select(c("cbioportal_patient_id", "OS_STATUS", "OS_MONTHS",
+                                                 "GENDER", "AGE", "nantomics_patient_uuid", "phc_patient_uuid", "phc_subject_id"))),
+                                    use.names = FALSE)
 
 setwd(study)
-clinicalFile <- "data_clinical_patient_new.txt"
+clinicalFile <- "data_clinical_patient.txt"
 
 if(file.exists(clinicalFile))
   file.remove(clinicalFile)
 file.create(clinicalFile)
 
 # Write to file
-write.table(clinical_final, clinicalFile, sep="\t", col.names = FALSE, row.names = FALSE,
+write.table(as.data.frame(clinical_final), clinicalFile, sep="\t", col.names = FALSE, row.names = FALSE,
             quote = FALSE, append = TRUE, na = "NA")
 
 clinicalMetaFile <- "meta_clinical_patient.txt"
@@ -68,10 +86,10 @@ sample_names <- sample_names[2:nrow(sample_names)]
 sample_names$sample_id <- ifelse(startsWith(sample_names$sample_id, "X"), substr(sample_names$sample_id, 2, nchar(sample_names$sample_id)), sample_names$sample_id)
 
 sample_names <- left_join(sample_names,
-                          unique(raw_clinical[, c("sample_id", "nantomics_patient_uuid", "nantomics_barcode", "nantomics_contrast_id")]),
+                          unique(raw_clinical[, c("sample_id", "cbioportal_patient_id", "nantomics_barcode", "nantomics_contrast_id")]),
                           by = "sample_id")
 
-header <- data.frame(nantomics_patient_uuid = c("#Nantomics Patient ID", "#Nantomics Patient ID", "#STRING", "#1", "PATIENT_ID"),
+header <- data.frame(cbioportal_patient_id = c("#Patient Identifier", "#Patient Identifier", "#STRING", "#1", "PATIENT_ID"),
                      sample_id = c("Sample ID", "Sample ID", "STRING", "1", "SAMPLE_ID"),
                      nantomics_barcode = c("Nantomics Barcode", "Nantomics Barcode", "STRING", "1", "BARCODE"),
                      nantomics_contrast_id = c("Nantomics Contrast ID", "Nantomics Contrast ID", "STRING", "1", "CONTRAST_ID"))
