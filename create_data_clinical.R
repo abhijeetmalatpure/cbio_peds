@@ -158,3 +158,7 @@ print("Samples data completed")
 #no_site_id$site_donor_id <- substr(no_site_id$th_sampleid, 0, regexpr("_[^_]*$", no_site_id$th_sampleid) - 1)
 #
 #df_clinical <- rbind(raw_clinical %>% dplyr::filter(is.na(raw_clinical$site_donor_id)))
+
+setwd(dataset)
+cancer_types <- read.csv('cancer_type.csv', sep=',', header = TRUE, na.strings = "")
+cancer_types <- subset(cancer_types, select = c("CANCER_SUBTYPES", "CANCER_TYPE"))
