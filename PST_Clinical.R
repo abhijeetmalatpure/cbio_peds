@@ -12,12 +12,18 @@ setwd(dataset)
 # Read patients into memory
 patient <- read.csv("data_clinical_patient_ALL_PST.txt", sep = "\t", header = FALSE, na.strings = c("N/A", "", "unavailable"))
 
+write.table(patient, "data_clinical_patient_formatted.txt", sep="\t", col.names = FALSE, row.names = FALSE,
+            quote = FALSE, append = FALSE, na = "NA")
 # Read samples into memory
 samples <- read.csv("data_clinical_sample_ALL_PST.txt", sep = "\t", header = FALSE, na.strings = c("N/A", "", "unavailable"))
 samples_unique <- unique(samples)
 
 # Remove samples which have names that are too long
-samples_ <- samples_unique[str_length(samples_unique$V2) < 50, ]
+samples_final <- samples_unique[str_length(samples_unique$V2) < 50, ]
+
+#
+write.table(samples_final, "data_clinical_sample_formatted.txt", sep="\t", col.names = FALSE, row.names = FALSE,
+            quote = FALSE, append = FALSE, na = "NA")
 
 #write.table(samples_final, "data_clinical_sample_formatted.txt", sep="\t", col.names = FALSE, row.names = FALSE,
 #            quote = FALSE, append = FALSE, na = "NA")
@@ -58,14 +64,16 @@ tests[5, ] <- colnames(tests)
 tests[1:5, 'SPECIMEN_REFERENCE_NUMBER'] <- samples[1:5, 'V2']
 
 # Append samples from labtest to samples data table
-samples_final <- full_join(samples_, tests, by = c('V2' = 'SPECIMEN_REFERENCE_NUMBER'))
+# samples_final <- full_join(samples_, unique(labtest[2:nrow(labtest), c('SPECIMEN_REFERENCE_NUMBER', 'PATIENT_ID')]), by = c('V2' = 'SPECIMEN_REFERENCE_NUMBER'))
+# samples_final$V1 <- ifelse(is.na(samples_final$V1), samples_final$PATIENT_ID, samples_final$V1)
+
+samples_final <- left_join(samples_, tests, by = c('V2' = 'SPECIMEN_REFERENCE_NUMBER'))
+
 samples_final$V1 <- ifelse(is.na(samples_final$V1),
                            substr(samples_final$V2, 2, str_locate(samples_final$V2, '_') -1),
                            samples_final$V1)
 
 # Write samples, labtest to file
-write.table(samples_final, "data_clinical_sample_formatted.txt", sep="\t", col.names = FALSE, row.names = FALSE,
-            quote = FALSE, append = FALSE, na = "NA")
 write.table(labtest[2:nrow(labtest),],"data_timeline_lab_test_formatted.txt", sep="\t", col.names = TRUE, row.names = FALSE,
             quote = FALSE, append = FALSE, na = "")
 
