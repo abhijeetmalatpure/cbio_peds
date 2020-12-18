@@ -42,9 +42,17 @@ expression_files <- list.files(pattern = '*.rgel', recursive = TRUE)
 expression_df <- combine_data(expression_files)
 expression_df$sample <- substr(expression_df$filename, 1, regexpr("\\.", expression_df$filename)-1)
 
-expression_transpose <- data.frame(matrix(ncol = length(unique(expression_df$sample))+2,
+expression_transpose <- data.frame(matrix(ncol = length(unique(expression_df$sample))+1,
                                           nrow = length(unique(expression_df$gene_name))))
-colnames(expression_transpose) <- c("Hugo_Symbol", "Entrez_Gene_Id", unique(expression_df$sample))
+colnames(expression_transpose) <- c("Hugo_Symbol", unique(expression_df$sample))
+
+# Remove sample ids that do not occur in the main samples file
+# code <- "c:/Users/abhmalat/OneDrive - Indiana University/cBio_PEDS"
+# setwd(code)
+# samples <- read.csv("data_clinical_sample_formatted.txt", sep = '\t', header = FALSE) %>% dplyr::select('V2')
+#
+# expression_exists <- unique(expression_df[(expression_df$sample %in% samples$V2), ])
+# missing <- unique(expression_df[!(expression_df$sample %in% samples$V2), "sample" ])
 
 expression_transpose$Hugo_Symbol <- unique(expression_df$gene_name)
 
@@ -58,51 +66,52 @@ for (row in seq_len(nrow(expression_df))) {
 
 Entrez_Gene_Ids <- getBM(attributes = c("hgnc_symbol", "entrezgene_id"), filters = 'hgnc_symbol',
                          values=expression_transpose$Hugo_Symbol, ensembl)
-colnames(Entrez_Gene_Ids)[2] <- "Entrez_Gene_Id"
+colnames(Entrez_Gene_Ids) <- c("Hugo_Symbol", "Entrez_Gene_Id")
 
-expression_final <- left_join(expression_transpose, Entrez_Gene_Ids, by = c('Hugo_Symbol' = 'hgnc_symbol'))
-
-code <- "c:/Users/abhmalat/OneDrive - Indiana University/cBio_PEDS"
-setwd(code)
-samples <- read.csv("data_clinical_sample_formatted.txt", sep = '\t', header = FALSE) %>% dplyr::select('V2')
-
-expression_exists <- unique(expression_final[(expression_final$Tumor_Sample_Barcode %in% samples$V2), ])
-missing <- unique(expression_final[!(expression_final$Tumor_Sample_Barcode %in% samples$V2), "Tumor_Sample_Barcode" ])
+expression_transpose <- expression_transpose[!names(expression_transpose) %in% c("Entrez_Gene_Id",
+                                                                                 "C051_0043_035165_T1_K1ID2_ps20201129101455",
+                                                                                 "C051_0042_034525_T1_K1ID2_ps20201121222158")]
+expression_final <- left_join(expression_transpose, Entrez_Gene_Ids, by = 'Hugo_Symbol')
 
 expressionFile <- "data_rna_expression.txt"
 
-write.table(expression_final, expressionFile, sep="\t", col.names = TRUE, row.names = FALSE,
+write.table(expression_final %>% dplyr::select(Hugo_Symbol, Entrez_Gene_Id, everything()), expressionFile, sep="\t",
+            col.names = TRUE, row.names = FALSE,
             quote = FALSE, append = FALSE, na = "NA")
 
-fusionCL <- ("case_lists/cases_sv.txt")
+expressionCL <- ("case_lists/cases_rna_seq_mrna.txt")
 
-f <- file(fusionCL)
+f <- file(expressionCL)
 writeLines(c(
  "cancer_study_identifier: PST_PEDS_2020",
- "stable_id: PST_PEDS_2020_sv",
- "case_list_name: RNA Fusion",
- "case_list_description: RNA Fusion",
- paste("case_list_ids: ", paste(unique(fusion$Tumor_Sample_Barcode), collapse = '\t'))
+ "stable_id: PST_PEDS_2020_rna_seq_mrna",
+ "case_list_name: RNA Expression samples",
+ "case_list_description: RNA expression samples [Continuous]",
+ paste("case_list_ids: ", paste(setdiff(names(expression_final),
+                                  c("Hugo_Symbol",
+                                    "Entrez_Gene_Id",
+                                    "C051_0043_035165_T1_K1ID2_ps20201129101455",
+                                    "C051_0042_034525_T1_K1ID2_ps20201121222158")), collapse = '\t'))
 ), f
 )
 close(f)
 
-FusionMetaFile <- "meta_fusion.txt"
+expressionMetafile <- "meta_rna_expression.txt"
 
-f <- file(FusionMetaFile)
+f <- file(expressionMetafile)
 writeLines(c(
-  "cancer_study_identifier: PST_PEDS_2020",
-  "genetic_alteration_type: FUSION",
-  "datatype: FUSION",
-  "stable_id: FUSION",
-  "show_profile_in_analysis_tab: true",
-  "profile_name: RNA Fusion",
-  "profile_description: RNA Fusion",
-  paste("data_filename: ", fusionFile)
+ "cancer_study_identifier: PST_PEDS_2020",
+ "genetic_alteration_type: MRNA_EXPRESSION",
+ "datatype: CONTINUOUS",
+ "stable_id: rna_seq_mrna",
+ "show_profile_in_analysis_tab: false",
+ "profile_name: RNA Expression",
+ "profile_description: RNA Expression [Continuous]",
+  paste("data_filename: ", expressionFile)
 ), f
 )
 close(f)
-print("RNA Fusion metafile completed")
+print("RNA Expression metafile completed")
 
 
 copynumber_files <- list.files(pattern = '*.copynumber.csv', recursive = TRUE)

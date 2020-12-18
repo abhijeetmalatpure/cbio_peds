@@ -82,7 +82,8 @@ treatment <- read.csv("data_timeline_treatment_ALL_PST.txt", sep = "\t", header 
 treatment$START_DATE <- ifelse(is.integer(as.integer(treatment$START_DATE)), treatment$START_DATE, "")
 treatment <- treatment[!is.na(treatment$PATIENT_ID), ]
 treatment <- unique(treatment)
-treatment$SPECIMEN_REFERENCE_NUMBER <- paste0("P", treatment$PATIENT_ID, "_D", treatment$START_DATE)
+#treatment$SPECIMEN_REFERENCE_NUMBER <- paste0("P", treatment$PATIENT_ID, "_D", treatment$START_DATE)
+treatment$DOSE <- substr(treatment$DOSAGE, 0, str_locate(treatment$DOSAGE, ', ')-1)
 
 # Write to file
 write.table((treatment), "data_timeline_treatment_formatted.txt", sep="\t", col.names = TRUE, row.names = FALSE,

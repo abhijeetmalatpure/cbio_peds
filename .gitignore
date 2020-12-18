@@ -40,3 +40,5 @@ vignettes/*.pdf
 
 # Project config files
 config.json
+*.cfg
+*config
