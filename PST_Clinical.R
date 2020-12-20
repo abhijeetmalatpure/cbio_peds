@@ -12,8 +12,6 @@ setwd(dataset)
 # Read patients into memory
 patient <- read.csv("data_clinical_patient_ALL_PST.txt", sep = "\t", header = FALSE, na.strings = c("N/A", "", "unavailable"))
 
-write.table(patient, "data_clinical_patient_formatted.txt", sep="\t", col.names = FALSE, row.names = FALSE,
-            quote = FALSE, append = FALSE, na = "NA")
 # Read samples into memory
 samples <- read.csv("data_clinical_sample_ALL_PST.txt", sep = "\t", header = FALSE, na.strings = c("N/A", "", "unavailable"))
 samples_unique <- unique(samples)
@@ -36,42 +34,86 @@ labtest <- read.csv("data_timeline_lab_test_ALL_PST.txt", sep = "\t", header = F
                     col.names = toupper(lt_colnames), na.strings = c("N/A", "", "unavailable"))
 labtest <- unique(labtest)
 
-# Set sample id as P<PatientID>_D<StartDate> for labtest entries because no sample_ids are known
-labtest$SPECIMEN_REFERENCE_NUMBER <- paste0("P", labtest$PATIENT_ID, "_D", labtest$START_DATE)
-samples_lt <- unique(labtest[2:nrow(labtest), c('PATIENT_ID', 'SPECIMEN_REFERENCE_NUMBER')])
+# Data engineering
 
-lt_transpose <- labtest[2:nrow(labtest), c('TEST', 'RESULT', 'PATIENT_ID', 'SPECIMEN_REFERENCE_NUMBER')]
-lt_transpose$TESTCODE <- toupper(gsub(' ', '_', gsub( '[^[:alnum:][:space:]]','', lt_transpose$TEST)))
+# Tobacco smoking
+cat_never_smoked <- c("Not applicable", "Never (less than 100 in lifetime)", "Never Smoker", "Never Smoked")
+patient[1:5, "V6"] <- c('Tobacco Smoking', 'Tobacco Smoking', 'STRING', 1, 'TOBACCO_SMOKING')
+smoking <- labtest %>% dplyr::filter(TEST == 'Tobacco: Smoking History') %>% dplyr::group_by(PATIENT_ID, TEST)
+# If value is any of the never categories,
+smoking$boolNever <- ifelse(smoking$RESULT %in% cat_never_smoked, 0, 1)
+neverSmoked <- smoking[, c("PATIENT_ID", "boolNever")] %>% summarise(never = mean(boolNever))
 
-# Transpose matrix
-tests <- data.frame(matrix(ncol= length(unique(lt_transpose$TESTCODE)), nrow = length(unique(lt_transpose$SPECIMEN_REFERENCE_NUMBER))+5))
-tests$SPECIMEN_REFERENCE_NUMBER <- c(samples[1:5, 'V2'], unique(lt_transpose$SPECIMEN_REFERENCE_NUMBER))
-colnames(tests)[1:ncol(tests)-1] <- unique(lt_transpose$TESTCODE)
+patient$V6[patient$V1 %in% neverSmoked$PATIENT_ID] <- 'Never Smoked/NA'
 
-# For each row in lt_transpose, move values into tests dataframe
-for (row in 1:nrow(lt_transpose)) {
-  specimen <- lt_transpose[row, "SPECIMEN_REFERENCE_NUMBER"]
-  tst <- lt_transpose[row, "TESTCODE"]
-  result <- lt_transpose[row, "RESULT"]
-  tests[tests$SPECIMEN_REFERENCE_NUMBER == specimen, tst] <- result
+# Remove all Tobacco smoking tests associated with neverSmoked patients
+labtest <- labtest %>% filter(!(PATIENT_ID %in% neverSmoked$PATIENT_ID & TEST == 'Tobacco: Smoking History'))
+
+# Alcohol use
+alcohol <- labtest %>% dplyr::filter(TEST == 'Alcohol Use') %>% dplyr::group_by(PATIENT_ID, TEST)
+
+
+
+# Cause of death
+death_cause <- labtest[labtest$TEST == 'Cause of Death', c("PATIENT_ID", "RESULT")]
+colnames(death_cause)[2] <- "V7"
+patient <- left_join(patient, death_cause, by = c('V1' = 'PATIENT_ID'))
+patient[1:5, "V7"] <- c('Cause of Death', 'Cause of Death', 'STRING', 1, 'CAUSE_OF_DEATH')
+labtest <- labtest %>% filter(!(PATIENT_ID %in% death_cause$PATIENT_ID & TEST == 'Cause of Death'))
+
+
+# unique(labtest[labtest$TEST == 'Deceased', 'RESULT']) is Yes,
+# so just make sure patient status are Deceased for those patients and then remove labtests
+death <- labtest[labtest$TEST == 'Deceased', c("PATIENT_ID", "RESULT")]
+death <- left_join(death, patient[6:nrow(patient), c("V1", "V2")], by = c('PATIENT_ID' = 'V1'))
+
+if(unique(death$V2) == 'DECEASED') {
+  labtest <- labtest %>% filter(!(PATIENT_ID %in% death$PATIENT_ID & TEST == 'Deceased'))
 }
 
-# Fix first five rows
-tests[1:2, ] <- colnames(tests)
-tests[3, ] <- 'STRING'
-tests[4, ] <- 1
-tests[5, ] <- colnames(tests)
-tests[1:5, 'SPECIMEN_REFERENCE_NUMBER'] <- samples[1:5, 'V2']
+
+# Write patients table to file
+write.table(patient, "data_clinical_patient_formatted.txt", sep="\t", col.names = FALSE, row.names = FALSE,
+            quote = FALSE, append = FALSE, na = "NA")
+
+
+# # This did not work.
+# # Set sample id as P<PatientID>_D<StartDate> for labtest entries because no sample_ids are known
+# labtest$SPECIMEN_REFERENCE_NUMBER <- paste0("P", labtest$PATIENT_ID, "_D", labtest$START_DATE)
+# samples_lt <- unique(labtest[2:nrow(labtest), c('PATIENT_ID', 'SPECIMEN_REFERENCE_NUMBER')])
+#
+# lt_transpose <- labtest[2:nrow(labtest), c('TEST', 'RESULT', 'PATIENT_ID', 'SPECIMEN_REFERENCE_NUMBER')]
+# lt_transpose$TESTCODE <- toupper(gsub(' ', '_', gsub( '[^[:alnum:][:space:]]','', lt_transpose$TEST)))
+#
+# # Transpose matrix
+# tests <- data.frame(matrix(ncol= length(unique(lt_transpose$TESTCODE)), nrow = length(unique(lt_transpose$SPECIMEN_REFERENCE_NUMBER))+5))
+# tests$SPECIMEN_REFERENCE_NUMBER <- c(samples[1:5, 'V2'], unique(lt_transpose$SPECIMEN_REFERENCE_NUMBER))
+# colnames(tests)[1:ncol(tests)-1] <- unique(lt_transpose$TESTCODE)
+#
+# # For each row in lt_transpose, move values into tests dataframe
+# for (row in 1:nrow(lt_transpose)) {
+#   specimen <- lt_transpose[row, "SPECIMEN_REFERENCE_NUMBER"]
+#   tst <- lt_transpose[row, "TESTCODE"]
+#   result <- lt_transpose[row, "RESULT"]
+#   tests[tests$SPECIMEN_REFERENCE_NUMBER == specimen, tst] <- result
+# }
+#
+# # Fix first five rows
+# tests[1:2, ] <- colnames(tests)
+# tests[3, ] <- 'STRING'
+# tests[4, ] <- 1
+# tests[5, ] <- colnames(tests)
+# tests[1:5, 'SPECIMEN_REFERENCE_NUMBER'] <- samples[1:5, 'V2']
 
 # Append samples from labtest to samples data table
 # samples_final <- full_join(samples_, unique(labtest[2:nrow(labtest), c('SPECIMEN_REFERENCE_NUMBER', 'PATIENT_ID')]), by = c('V2' = 'SPECIMEN_REFERENCE_NUMBER'))
 # samples_final$V1 <- ifelse(is.na(samples_final$V1), samples_final$PATIENT_ID, samples_final$V1)
 
-samples_final <- left_join(samples_, tests, by = c('V2' = 'SPECIMEN_REFERENCE_NUMBER'))
+# samples_final <- left_join(samples_, tests, by = c('V2' = 'SPECIMEN_REFERENCE_NUMBER'))
 
-samples_final$V1 <- ifelse(is.na(samples_final$V1),
-                           substr(samples_final$V2, 2, str_locate(samples_final$V2, '_') -1),
-                           samples_final$V1)
+# samples_final$V1 <- ifelse(is.na(samples_final$V1),
+#                            substr(samples_final$V2, 2, str_locate(samples_final$V2, '_') -1),
+#                            samples_final$V1)
 
 # Write samples, labtest to file
 write.table(labtest[2:nrow(labtest),],"data_timeline_lab_test_formatted.txt", sep="\t", col.names = TRUE, row.names = FALSE,
