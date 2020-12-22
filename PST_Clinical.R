@@ -20,7 +20,7 @@ samples_unique <- unique(samples)
 samples_final <- samples_unique[str_length(samples_unique$V2) < 50, ]
 
 #
-write.table(samples_final, "data_clinical_sample_formatted.txt", sep="\t", col.names = FALSE, row.names = FALSE,
+write.table(samples_final, "data_clinical_sample_formatted.csv", sep="\t", col.names = FALSE, row.names = FALSE,
             quote = FALSE, append = FALSE, na = "NA")
 
 #write.table(samples_final, "data_clinical_sample_formatted.txt", sep="\t", col.names = FALSE, row.names = FALSE,

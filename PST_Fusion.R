@@ -41,8 +41,25 @@ structural_files <- list.files(pattern = '*.structural.csv', recursive = TRUE)
 
 fusion_df <- combine_data(structural_files) %>% dplyr::filter(effect == 'rna_fusion')
 
+
+# Foundation Fusion files (.fnv)
+fnd <- "c:/Users/abhmalat/OneDrive - Indiana University/cBio_PEDS/data/foundation/files"
+setwd(fnd)
+fnv_files <- list.files(pattern = '*.fnv', recursive = TRUE)
+
+# Lambda function to remove chr prefix from chromosomes
+remove_chr_prefix <- function(chromosome) (gsub("chr", "", chromosome))
+
+# Combine data from all fnv files, filter fusion effect rows, remove chr prefix from chromosomes
+combined_fnv <- combine_data(fnv_files) %>% filter(effect == 'fusion')
+
+if(identical(colnames(combined_fnv), colnames(fusion_df)))
+  fusion_df <- rbind(fusion_df, combined_fnv) %>%
+    mutate_at(c("chromosome1", "chromosome2"), remove_chr_prefix)
+
 fusion_df$Fusion1 <- paste(fusion_df$gene1, fusion_df$gene2, "Fusion")
 fusion_df$Fusion2 <- paste(fusion_df$gene2, fusion_df$gene1, "Fusion")
+fusion_df$Frame <- ifelse(fusion_df$in.frame == 'yes', "in-frame", )
 
 fusion_final <- fusion_df[, c("gene1", "filename", "Fusion1", "sequence_type")]
 fusion_final <- rbind(fusion_final, setNames(fusion_df[, c("gene2", "filename", "Fusion2", "sequence_type")], names(fusion_final)))
@@ -53,7 +70,8 @@ fusion_final$Center <- "unknown"
 fusion_final$DNA_support <- "no"
 fusion_final$RNA_support <- "yes"
 fusion_final$Method <- "unknown"
-fusion_final$Frame <- "unknown"
+fusion_final$Frame <- fusion_df$in.frame
+
 
 Entrez_Gene_Ids <- getBM(attributes = c("hgnc_symbol", "entrezgene_id"), filters = 'hgnc_symbol',
                          values=fusion_final$Hugo_Symbol, ensembl)
@@ -67,6 +85,8 @@ samples <- read.csv("data_clinical_sample_formatted.txt", sep = '\t', header = F
 
 fusion_exists <- unique(fusion[(fusion$Tumor_Sample_Barcode %in% samples$V2), ])
 missing <- unique(fusion[!(fusion$Tumor_Sample_Barcode %in% samples$V2), "Tumor_Sample_Barcode" ])
+
+
 
 
 

@@ -18,14 +18,35 @@ mafdir <- "c:/Users/abhmalat/OneDrive - Indiana University/cBio_PEDS/data/ashion
 setwd(mafdir)
 
 mafs <- list.files(mafdir, pattern = "*.maf", recursive = FALSE)
+somaticmafs <- list.files(mafdir, pattern = "*.somatic*", recursive = FALSE)
 
 combined_mafs <- combine_maf_files(mafs)
+somatic_combined <- combine_maf_files(somaticmafs)
 
 dataset <- "c:/Users/abhmalat/OneDrive - Indiana University/cBio_PEDS"
 setwd(dataset)
 
+# Add samples from germline to samples file. Match patient with the same as it's somatic sample
+vcf_metadata <- read.csv('vcf_metadata.csv', sep = '\t', header = TRUE) %>% filter(vcftype == 'germline') %>% dplyr::select(c(sample_id, normal))
+
+samples <- read.csv('data_clinical_sample_formatted.txt', sep = '\t', header = FALSE)
+
+vcf_metadata <- left_join(vcf_metadata, (samples %>% dplyr::select(c(V1, V2))), by = c("sample_id"="V2"))
+vcf_metadata$V6 <- 'ASHION'
+colnames(vcf_metadata)[1] <- "V2"
+vcf_metadata[, c('V3', 'V4', 'V5')] <- NA
+
+samples_final <- rbind(samples_final, vcf_metadata %>% dplyr::select(c('V1', 'V2', 'V3', 'V4', 'V5', 'V6')))
+samples_final <- unique(samples_final)
+write.table(samples_final, "data_clinical_sample_formatted.csv", col.names = FALSE,
+            row.names = FALSE, sep = "\t", quote = FALSE, append = FALSE, na = "NA")
+
+
 # write.mafSummary(somatic_combined, "data_mutation_somatic_enhanced_combined.maf")
 mutationFile <- "data_mutations_combined_enhanced.maf"
+
+write.table(as.data.frame(som_data), "data_somatic_mutations_combined_enhanced.maf", col.names = TRUE,
+            row.names = FALSE, sep = "\t", quote = FALSE, append = FALSE, na = "NA")
 
 write.table(as.data.frame(combined_mafs@data), mutationFile,
             col.names = TRUE, row.names = FALSE, sep = "\t",
