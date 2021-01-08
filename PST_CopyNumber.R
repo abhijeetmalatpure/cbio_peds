@@ -43,74 +43,67 @@ cn_df <- combine_data(copynumber_files)
 # Remove chr prefix from chromosomes
 cn_df$chromosome <- gsub("^chr", replacement = "", x= cn_df$chromosome, ignore.case = FALSE)
 
-write.table(cn_df, "cn.txt", sep="\t", col.names = TRUE, row.names = FALSE,
-            quote = FALSE, append = FALSE, na = "NA")
+for(row in row.names(cn_df)) {
+  cn_df$log2[as.integer(row)] <- (fromJSON(gsub('\'', '"', cn_df$attributes[as.integer(row)]))$LOG2FC)
+}
 
-fusion_df$Fusion1 <- paste(fusion_df$gene1, fusion_df$gene2, "Fusion")
-fusion_df$Fusion2 <- paste(fusion_df$gene2, fusion_df$gene1, "Fusion")
+cn_transpose <- data.frame(matrix(ncol = length(unique(cn_df$sample))+1,
+                                          nrow = length(unique(cn_df$gene))))
+colnames(cn_transpose) <- c("Hugo_Symbol", unique(cn_df$sample))
 
-fusion_final <- fusion_df[, c("gene1", "sample_id", "Fusion1", "sequence_type")]
-fusion_final <- rbind(fusion_final, setNames(fusion_df[, c("gene2", "sample_id", "Fusion2", "sequence_type")], names(fusion_final)))
-colnames(fusion_final) <- c("Hugo_Symbol", "Tumor_Sample_Barcode", "Fusion", "Fusion_Status")
+cn_transpose$Hugo_Symbol <- unique(cn_df$gene)
 
-fusion_final$Center <- "unknown"
-fusion_final$DNA_support <- "no"
-fusion_final$RNA_support <- "yes"
-fusion_final$Method <- "unknown"
-fusion_final$Frame <- "unknown"
+for (row in seq_len(nrow(cn_df))) {
+  expvalue <- cn_df[row, "copy_number"]
+  gene <- cn_df[row, "gene"]
+  sample <- cn_df[row, "sample"]
+  cn_transpose[cn_transpose$Hugo_Symbol == gene, sample] <- expvalue
+}
 
 Entrez_Gene_Ids <- getBM(attributes = c("hgnc_symbol", "entrezgene_id"), filters = 'hgnc_symbol',
-                         values=fusion_final$Hugo_Symbol, ensembl)
-colnames(Entrez_Gene_Ids)[2] <- "Entrez_Gene_Id"
+                         values=cn_transpose$Hugo_Symbol, ensembl)
+colnames(Entrez_Gene_Ids) <- c("Hugo_Symbol", "Entrez_Gene_Id")
 
-fusion <- left_join(fusion_final, Entrez_Gene_Ids, by = c('Hugo_Symbol' = 'hgnc_symbol'))
+cn_final <- left_join(cn_transpose, Entrez_Gene_Ids, by = 'Hugo_Symbol')
 
-fusion$changedSamples <-
-samples <- read.csv("data_clinical_sample_formatted.txt", sep = '\t', header = FALSE) %>% dplyr::select('V2')
+cn_final <- cn_final[, (colnames(cn_final) %in% c("Hugo_Symbol") == FALSE)]
 
-fusion_exists <- unique(fusion[(fusion$Tumor_Sample_Barcode %in% samples$V2), ])
-missing <- unique(fusion[!(fusion$Tumor_Sample_Barcode %in% samples$V2), "Tumor_Sample_Barcode" ])
 
 code <- "c:/Users/abhmalat/OneDrive - Indiana University/cBio_PEDS"
 setwd(code)
 
-fusionFile <- "data_fusion.txt"
+cnFile <- "data_copynumber_continuous.txt"
 
-write.table(fusion, fusionFile, sep="\t", col.names = TRUE, row.names = FALSE,
+write.table(cn_final %>% dplyr::select(c('Entrez_Gene_Id', everything())), cnFile, sep="\t", col.names = TRUE, row.names = FALSE,
             quote = FALSE, append = FALSE, na = "NA")
 
-fusionCL <- ("case_lists/cases_sv.txt")
+cnCL <- ("case_lists/cases_cna.txt")
 
-f <- file(fusionCL)
+f <- file(cnCL)
 writeLines(c(
  "cancer_study_identifier: PST_PEDS_2020",
- "stable_id: PST_PEDS_2020_sv",
- "case_list_name: RNA Fusion",
- "case_list_description: RNA Fusion",
- paste("case_list_ids: ", paste(unique(fusion$Tumor_Sample_Barcode), collapse = '\t'))
+ "stable_id: PST_PEDS_2020_cna",
+ "case_list_name: Copy Number Alterations",
+ "case_list_description: Copy Number Alterations  [Continuous]",
+ "case_list_category: all_cases_with_cna_data",
+ paste("case_list_ids: ", paste(unique(cn_df$sample), collapse = '\t'))
 ), f
 )
 close(f)
 
-FusionMetaFile <- "meta_fusion.txt"
+cnMetaFile <- "meta_copynumber_continuous.txt"
 
-f <- file(FusionMetaFile)
+f <- file(cnMetaFile)
 writeLines(c(
   "cancer_study_identifier: PST_PEDS_2020",
-  "genetic_alteration_type: FUSION",
-  "datatype: FUSION",
-  "stable_id: FUSION",
-  "show_profile_in_analysis_tab: true",
-  "profile_name: RNA Fusion",
-  "profile_description: RNA Fusion",
-  paste("data_filename: ", fusionFile)
+  "genetic_alteration_type: COPY_NUMBER_ALTERATION",
+  "datatype: CONTINUOUS",
+  "stable_id: linear_CNA",
+  "show_profile_in_analysis_tab: false",
+  "profile_name: Copy Number Alterations",
+  "profile_description: Copy Number Alterations",
+  paste("data_filename: ", cnFile)
 ), f
 )
 close(f)
-print("RNA Fusion metafile completed")
-
-
-copynumber_files <- list.files(pattern = '*.copynumber.csv', recursive = TRUE)
-somatic_files <- list.files(pattern = '*.somatic.vcf$', recursive = TRUE)
-germline_files <- list.files(pattern = '*.germline.vcf$', recursive = TRUE)
-
+print("CNA metafile completed")

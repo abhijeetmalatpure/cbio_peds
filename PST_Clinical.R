@@ -20,7 +20,7 @@ samples_unique <- unique(samples)
 samples_final <- samples_unique[str_length(samples_unique$V2) < 50, ]
 
 #
-write.table(samples_final, "data_clinical_sample_formatted.csv", sep="\t", col.names = FALSE, row.names = FALSE,
+write.table(samples_final, "data_clinical_sample_formatted.txt", sep="\t", col.names = FALSE, row.names = FALSE,
             quote = FALSE, append = FALSE, na = "NA")
 
 #write.table(samples_final, "data_clinical_sample_formatted.txt", sep="\t", col.names = FALSE, row.names = FALSE,
@@ -29,7 +29,7 @@ write.table(samples_final, "data_clinical_sample_formatted.csv", sep="\t", col.n
 # Read Labtest into memory, get additional headers, combine both, remove duplicate
 labtest_raw <- read.csv("data_timeline_lab_test_ALL_PST.txt", sep = "\t", header = FALSE, na.strings = c("N/A", "", "unavailable"))
 lt_header <- read.csv("data_extra_header_timeline_lab_test_ALL_PST.txt", sep = "\t", header = FALSE, na.strings = c("N/A", "", "unavailable"))
-lt_colnames <- cbind(labtest_raw[1,1:6], lt_header[1,])
+lt_colnames <- cbind(labtest_raw[1,1:7], lt_header[1,])
 labtest <- read.csv("data_timeline_lab_test_ALL_PST.txt", sep = "\t", header = FALSE,
                     col.names = toupper(lt_colnames), na.strings = c("N/A", "", "unavailable"))
 labtest <- unique(labtest)
@@ -37,14 +37,14 @@ labtest <- unique(labtest)
 # Data engineering
 
 # Tobacco smoking
-cat_never_smoked <- c("Not applicable", "Never (less than 100 in lifetime)", "Never Smoker", "Never Smoked")
+cat_never_smoked <- c("Never (less than 100 in lifetime)", "Never Smoker", "Never Smoked")
 patient[1:5, "V6"] <- c('Tobacco Smoking', 'Tobacco Smoking', 'STRING', 1, 'TOBACCO_SMOKING')
 smoking <- labtest %>% dplyr::filter(TEST == 'Tobacco: Smoking History') %>% dplyr::group_by(PATIENT_ID, TEST)
 # If value is any of the never categories,
 smoking$boolNever <- ifelse(smoking$RESULT %in% cat_never_smoked, 0, 1)
 neverSmoked <- smoking[, c("PATIENT_ID", "boolNever")] %>% summarise(never = mean(boolNever))
 
-patient$V6[patient$V1 %in% neverSmoked$PATIENT_ID] <- 'Never Smoked/NA'
+patient$V6[patient$V1 %in% neverSmoked$PATIENT_ID] <- 'Never Smoked'
 
 # Remove all Tobacco smoking tests associated with neverSmoked patients
 labtest <- labtest %>% filter(!(PATIENT_ID %in% neverSmoked$PATIENT_ID & TEST == 'Tobacco: Smoking History'))
@@ -121,8 +121,8 @@ write.table(labtest[2:nrow(labtest),],"data_timeline_lab_test_formatted.txt", se
 
 # Read treatment, replace non-numeric start dates with blanks, remove rows with NA patient ids, drop duplicates
 treatment <- read.csv("data_timeline_treatment_ALL_PST.txt", sep = "\t", header = TRUE, na.strings = c("N/A", "", "unavailable"))
-treatment$START_DATE <- ifelse(is.integer(as.integer(treatment$START_DATE)), treatment$START_DATE, "")
-treatment <- treatment[!is.na(treatment$PATIENT_ID), ]
+#treatment$X_DATE <- ifelse(is.integer(treatment$START_DATE), treatment$START_DATE, "")
+#treatment <- treatment[!is.na(treatment$PATIENT_ID), ]
 treatment <- unique(treatment)
 #treatment$SPECIMEN_REFERENCE_NUMBER <- paste0("P", treatment$PATIENT_ID, "_D", treatment$START_DATE)
 treatment$DOSE <- substr(treatment$DOSAGE, 0, str_locate(treatment$DOSAGE, ', ')-1)

@@ -68,16 +68,21 @@ Entrez_Gene_Ids <- getBM(attributes = c("hgnc_symbol", "entrezgene_id"), filters
                          values=expression_transpose$Hugo_Symbol, ensembl)
 colnames(Entrez_Gene_Ids) <- c("Hugo_Symbol", "Entrez_Gene_Id")
 
-expression_transpose <- expression_transpose[!names(expression_transpose) %in% c("Entrez_Gene_Id",
-                                                                                 "C051_0043_035165_T1_K1ID2_ps20201129101455",
-                                                                                 "C051_0042_034525_T1_K1ID2_ps20201121222158")]
+# expression_transpose <- expression_transpose[!names(expression_transpose) %in% c("Entrez_Gene_Id",
+#                                                                                  "C051_0043_035165_T1_K1ID2_ps20201129101455",
+#                                                                                  "C051_0042_034525_T1_K1ID2_ps20201121222158")]
 expression_final <- left_join(expression_transpose, Entrez_Gene_Ids, by = 'Hugo_Symbol')
+
+newexp <- expression_final[!is.na(expression_final$Entrez_Gene_Id), ] %>% dplyr::select(-c("Hugo_Symbol"))
+dataset <- "c:/Users/abhmalat/OneDrive - Indiana University/cBio_PEDS"
+setwd(dataset)
 
 expressionFile <- "data_rna_expression.txt"
 
-write.table(expression_final %>% dplyr::select(Hugo_Symbol, Entrez_Gene_Id, everything()), expressionFile, sep="\t",
+write.table(newexp %>% dplyr::select(Entrez_Gene_Id, everything()), expressionFile, sep="\t",
             col.names = TRUE, row.names = FALSE,
             quote = FALSE, append = FALSE, na = "NA")
+
 
 expressionCL <- ("case_lists/cases_rna_seq_mrna.txt")
 
@@ -87,11 +92,7 @@ writeLines(c(
  "stable_id: PST_PEDS_2020_rna_seq_mrna",
  "case_list_name: RNA Expression samples",
  "case_list_description: RNA expression samples [Continuous]",
- paste("case_list_ids: ", paste(setdiff(names(expression_final),
-                                  c("Hugo_Symbol",
-                                    "Entrez_Gene_Id",
-                                    "C051_0043_035165_T1_K1ID2_ps20201129101455",
-                                    "C051_0042_034525_T1_K1ID2_ps20201121222158")), collapse = '\t'))
+ paste("case_list_ids: ", paste(unique(expression_df$sample), collapse = '\t'))
 ), f
 )
 close(f)
