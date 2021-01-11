@@ -50,7 +50,7 @@ vcf_metadata = pd.read_csv('/N/project/phi_ri/nantomics/peds_matching/Riley_Rese
 vcf_metadata.columns = vcf_metadata.iloc[44]
 
 vcf_metadata['Germline'] = ''
-vcf_metadata['Somatic'] = ""
+vcf_metadata['Somatic'] = ''
 
 for index, row in vcf_metadata.iterrows():
     for name in glob.glob('/N/project/phi_ingest_nantomics/nantomics/nant/peds/pst-files-per-patient/*/VCF/*' + row['ContrastUUID'] + '*vcf.gz'):
@@ -69,34 +69,74 @@ run = str(int(time.mktime(datetime.datetime.now().timetuple())))
 tmpdir = {'v2m': join(expanduser("~"), 'tmp', ("MG_" + '99b81dc8dd7d'), ("V2M_" + run))}
 [os.makedirs(tmp, exist_ok=True) for tmp in tmpdir.values()]
 
-evcffile = '/N/project/phi_ingest_nantomics/nantomics/nant/peds/pst-files-per-patient/' \
-           '0159ccb0-bde8-446f-b241-79643ca5185d_hXqJfQ9jHH7LXu2BA87wv3/VCF/8792c312-e3cc-4e96-b0ec-99b81dc8dd7d_2018-06-30.germ.vcf.gz'
 
-maffile = join(mafpath, ('8792c312-e3cc-4e96-b0ec-99b81dc8dd7d_2018-06-30.germ.vcf.gz' + '.maf'))
+def vcf2maf_call(vcf_filename, sample_id, vcf_type):
+    with gzip.open(vcf_filename, mode='r') as vcf:
+        vcf_extract = open(join(tmpdir['v2m'], 'germline.vcf'), 'wb')
+        for line in vcf:
+            vcf_extract.write(line)
+        vcf_extract.close()
 
-with gzip.open(evcffile, mode='r') as vcf:
-    file_content = vcf.read()
-    fp = open(join(tmpdir['v2m'], 'tmp.vcf'), 'wb')
-    fp.write(file_content)
+    id_type = '--normal-id' if vcf_type == 'germline' else '--tumor-id'
+
+    maf_file = join(mafpath, sample_id + '.' + vcf_type + '.maf')
+    vcf2maf = [
+        'perl', join(toolspath, 'vcf2maf.pl'),
+        '--input-vcf', vcf_extract.name,
+        '--output-maf', maf_file,
+        '--vep-path', join(toolspath, 'vep_hg19'),
+        '--vep-data', join(expanduser("~"), '.vep'),
+        '--vep-forks', '5',
+        '--tmp-dir', tmpdir['v2m'],
+        '--vcf-tumor-id', 'TUMOR',
+        '--vcf-normal-id', 'NORMAL',
+        id_type, sample_id,
+        '--ncbi-build', 'GRCh37',
+        '--ref-fasta',
+        join(expanduser("~"),
+             '.vep/homo_sapiens/102_GRCh37/Homo_sapiens.GRCh37.75.dna.primary_assembly.fa.gz')
+    ]
+    logger.info('VCF2MAF: ' + ' '.join(vcf2maf))
+
+    os.unlink(vcf_extract.name)
 
 
+# For each row unzip
+for index, row in vcf_metadata:
+    # Process germline file for sample
+    vcf2maf_call(row.Germline, row.ContrastUUID, 'germline')
+    vcf2maf_call(row.Somatic, row.ContrastUUID, 'somatic')
 
-vcf2maf = [
-    'perl', join(toolspath, 'vcf2maf.pl'),
-    '--input-vcf', fp.name,
-    '--output-maf', maffile,
-    '--vep-path', join(toolspath, 'vep_hg19'),
-    '--vep-data', join(expanduser("~"), '.vep'),
-    '--vep-forks', '5',
-    '--tmp-dir', tmpdir['v2m'],
-    '--vcf-tumor-id', 'TUMOR',
-    '--vcf-normal-id', 'NORMAL',
-    '--tumor-id', 'TUMOR',
-    '--normal-id', '99b81dc8dd7d',
-    '--ncbi-build', 'GRCh37',
-    '--ref-fasta',
-    join(expanduser("~"),
-         '.vep/homo_sapiens/102_GRCh37/Homo_sapiens.GRCh37.75.dna.primary_assembly.fa.gz')
-]
 
-print("VCF2MAF: " + ' '.join(vcf2maf))
+# evcffile = '/N/project/phi_ingest_nantomics/nantomics/nant/peds/pst-files-per-patient/' \
+#            'c21b0ed9-2478-4ca1-a094-7dd29c773530_aQka3c2U3TGyMtL76aWGbJ/VCF/adaae6c5-5895-4ca3-a00f-34f68044524e_2017-09-04.germ.vcf.gz'
+#
+# id = evcffile.split('/')[-1].split('_')[0]
+#
+# maffile = join(mafpath, 'adaae6c5-5895-4ca3-a00f-34f68044524e_2017-09-04.germ.maf')
+#
+#
+#     # file_content = vcf.read()
+#     # fp.write(file_content)
+#
+#
+#
+# vcf2maf = [
+#     'perl', join(toolspath, 'vcf2maf.pl'),
+#     '--input-vcf', fp.name,
+#     '--output-maf', maffile,
+#     '--vep-path', join(toolspath, 'vep_hg19'),
+#     '--vep-data', join(expanduser("~"), '.vep'),
+#     '--vep-forks', '5',
+#     '--tmp-dir', tmpdir['v2m'],
+#     '--vcf-tumor-id', 'TUMOR',
+#     '--vcf-normal-id', 'NORMAL',
+#     '--normal-id', 'adaae6c5-5895-4ca3-a00f-34f68044524e',
+#     '--ncbi-build', 'GRCh37',
+#     '--ref-fasta',
+#     join(expanduser("~"),
+#          '.vep/homo_sapiens/102_GRCh37/Homo_sapiens.GRCh37.75.dna.primary_assembly.fa.gz')
+# ]
+#
+#
+# print(' '.join(vcf2maf))
