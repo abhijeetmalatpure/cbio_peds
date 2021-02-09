@@ -7,21 +7,49 @@ library(maftools)
 
 combine_maf_files <- function (filenames) {
   maf_files <- list()
+  failed_maf <- list()
+  x <- 1
   for (i in seq_along(filenames)) {
-    # Set maf_files[i] to the content of filenames[i]
-    maf_files[i] <- read.maf(filenames[i])
+      maf <- read_maf_file(filenames[i])#, vc_nonSyn = vcNames)
+      if (!is.na(maf)) {
+        maf_files[x] <- maf
+        x <- x + 1 }
+      else {
+        failed_maf <- append(failed_maf, filenames[i])
+      }
   }
-  return(merge_mafs(maf_files))
+  print("=======================================================================\n")
+  return(list("merged"= merge_mafs(maf_files), "failed" = failed_maf))
 }
 
-mafdir <- "c:/Users/abhmalat/OneDrive - Indiana University/cBio_PEDS/data/ashion/enhanced"
+
+read_maf_file <- function(x) {
+  tryCatch(read.maf(x),
+           error = function(x) {print(paste(x, ": Error reading file. Skipping")); NaN})
+}
+
+#mafdir <- "c:/Users/abhmalat/OneDrive - Indiana University/cBio_PEDS/data/ashion/enhanced"
+#mafdir <- "c:/Users/abhmalat/OneDrive - Indiana University/cBio_PEDS/data/nantomics/maf"
+mafdir <- "/N/project/phi_asha_archive/peds_pst/ashion/maf/somatic"
 setwd(mafdir)
 
-mafs <- list.files(mafdir, pattern = "*.maf", recursive = FALSE)
-somaticmafs <- list.files(mafdir, pattern = "*.somatic*", recursive = FALSE)
+mafs <- list.files(mafdir, pattern = "*.maf$", recursive = FALSE)
+somaticmafs <- list.files(mafdir, pattern = "*\\.somatic.maf$", recursive = FALSE)
+germlinemafs <- list.files(mafdir, pattern = "*.germline.maf$", recursive = FALSE)
 
 combined_mafs <- combine_maf_files(mafs)
 somatic_combined <- combine_maf_files(somaticmafs)
+germline_combined <- combine_maf_files(germlinemafs)
+
+# Save merged MAF file and failed list of MAFs
+peds_somatic_merged <- somatic_combined$merged
+peds_somatic_failed <- somatic_combined$failed
+
+# Write merged MAF file
+write.table(as.data.frame(peds_somatic_merged@data), "peds_ashion_somatic.maf", col.names = TRUE, row.names = FALSE, sep = "\t",quote = FALSE, append = FALSE, na = "")
+
+# Save failed maf file list
+write.table(as.data.frame(peds_somatic_failed), "peds_ashion_somatic_failed.txt", col.names = FALSE, row.names = FALSE, sep = "\t",quote = FALSE, append = FALSE, na = "NA")
 
 dataset <- "c:/Users/abhmalat/OneDrive - Indiana University/cBio_PEDS"
 setwd(dataset)

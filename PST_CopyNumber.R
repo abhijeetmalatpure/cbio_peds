@@ -37,8 +37,10 @@ ensembl <- useMart(host = 'grch37.ensembl.org',
                    dataset = 'hsapiens_gene_ensembl')
 
 copynumber_files <- list.files(pattern = '*.copynumber.csv', recursive = TRUE)
+structural_files <- list.files(pattern = '*.structural.csv', recursive = TRUE)
 
 cn_df <- combine_data(copynumber_files)
+sv_df <- combine_data(structural_files)
 
 # Remove chr prefix from chromosomes
 cn_df$chromosome <- gsub("^chr", replacement = "", x= cn_df$chromosome, ignore.case = FALSE)
