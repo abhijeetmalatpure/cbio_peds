@@ -18,13 +18,15 @@ combine_maf_files <- function (filenames) {
         failed_maf <- append(failed_maf, filenames[i])
       }
   }
-  print("=======================================================================\n")
+  print("=======================================================================")
   return(list("merged"= merge_mafs(maf_files), "failed" = failed_maf))
 }
 
 
 read_maf_file <- function(x) {
-  tryCatch(read.maf(x),
+  maf <- data.table::fread(x)
+  vcNames <- unique(maf$Variant_Classification)
+  tryCatch(read.maf(x, vc_nonSyn = vcNames),
            error = function(x) {print(paste(x, ": Error reading file. Skipping")); NaN})
 }
 
@@ -35,7 +37,7 @@ setwd(mafdir)
 
 mafs <- list.files(mafdir, pattern = "*.maf$", recursive = FALSE)
 somaticmafs <- list.files(mafdir, pattern = "*\\.somatic.maf$", recursive = FALSE)
-germlinemafs <- list.files(mafdir, pattern = "*.germline.maf$", recursive = FALSE)
+germlinemafs <- list.files(mafdir, pattern = "*\\.germline.maf$", recursive = FALSE)
 
 combined_mafs <- combine_maf_files(mafs)
 somatic_combined <- combine_maf_files(somaticmafs)
@@ -45,11 +47,13 @@ germline_combined <- combine_maf_files(germlinemafs)
 peds_somatic_merged <- somatic_combined$merged
 peds_somatic_failed <- somatic_combined$failed
 
+peds_somatic_merged@data$Mutation_Status <- as.character(peds_somatic_merged@data$Mutation_Status)
+peds_somatic_merged@data$Mutation_Status <- "Somatic" # Or "Germline" for germline
 # Write merged MAF file
 write.table(as.data.frame(peds_somatic_merged@data), "peds_ashion_somatic.maf", col.names = TRUE, row.names = FALSE, sep = "\t",quote = FALSE, append = FALSE, na = "")
 
 # Save failed maf file list
-write.table(as.data.frame(peds_somatic_failed), "peds_ashion_somatic_failed.txt", col.names = FALSE, row.names = FALSE, sep = "\t",quote = FALSE, append = FALSE, na = "NA")
+write.table(as.data.frame(peds_somatic_failed), "peds_foundation_somatic_failed.txt", col.names = FALSE, row.names = FALSE, sep = "\n",quote = FALSE, append = FALSE, na = "NA")
 
 dataset <- "c:/Users/abhmalat/OneDrive - Indiana University/cBio_PEDS"
 setwd(dataset)
