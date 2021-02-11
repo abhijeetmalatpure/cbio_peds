@@ -18,7 +18,7 @@ if not os.path.isdir('log'):
 
 # Before we do anything, set up logging.
 epoch_time = time.mktime(datetime.datetime.now().timetuple())
-log_filename = os.path.join(f"log/nantomics_rsem_{str(int(epoch_time))}.log")
+log_filename = os.path.join(f"log/PST_nantomics_rsem_{str(int(epoch_time))}.log")
 
 print(f'Writing to {log_filename}')
 logging.basicConfig(level=logging.INFO,

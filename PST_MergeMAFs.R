@@ -10,15 +10,16 @@ combine_maf_files <- function (filenames) {
   failed_maf <- list()
   x <- 1
   for (i in seq_along(filenames)) {
-      maf <- read_maf_file(filenames[i])#, vc_nonSyn = vcNames)
-      if (!is.na(maf)) {
-        maf_files[x] <- maf
-        x <- x + 1 }
-      else {
-        failed_maf <- append(failed_maf, filenames[i])
-      }
+    print(paste(i,"-", "Reading", filenames[i]))
+    maf <- read_maf_file(filenames[i])#, vc_nonSyn = vcNames)
+    if (!is.na(maf)) {
+      maf_files[x] <- maf
+      x <- x + 1 }
+    else {
+      failed_maf <- append(failed_maf, filenames[i])
+    }
   }
-  print("=======================================================================")
+  print("***********************************************************************")
   return(list("merged"= merge_mafs(maf_files), "failed" = failed_maf))
 }
 
@@ -50,10 +51,12 @@ peds_somatic_failed <- somatic_combined$failed
 peds_somatic_merged@data$Mutation_Status <- as.character(peds_somatic_merged@data$Mutation_Status)
 peds_somatic_merged@data$Mutation_Status <- "Somatic" # Or "Germline" for germline
 # Write merged MAF file
-write.table(as.data.frame(peds_somatic_merged@data), "peds_ashion_somatic.maf", col.names = TRUE, row.names = FALSE, sep = "\t",quote = FALSE, append = FALSE, na = "")
+write.table(as.data.frame(peds_somatic_merged@data), "mm_cmg_somatic_snvs_indels.maf", col.names = TRUE, row.names = FALSE, sep = "\t",quote = FALSE, append = FALSE, na = "")
 
 # Save failed maf file list
-write.table(as.data.frame(peds_somatic_failed), "peds_foundation_somatic_failed.txt", col.names = FALSE, row.names = FALSE, sep = "\n",quote = FALSE, append = FALSE, na = "NA")
+write.table(as.data.frame(peds_somatic_failed), "mm_cmg_somatic_failed.txt", col.names = FALSE, row.names = FALSE, sep = "\t", quote = FALSE, append = FALSE, na = "")
+
+write.table(as.data.frame(samples), "samples_sequenced.tsv", col.names = FALSE, row.names = FALSE, sep = "\t", quote = FALSE, , append = FALSE, na = "")
 
 dataset <- "c:/Users/abhmalat/OneDrive - Indiana University/cBio_PEDS"
 setwd(dataset)
@@ -84,15 +87,15 @@ write.table(as.data.frame(combined_mafs@data), mutationFile,
             col.names = TRUE, row.names = FALSE, sep = "\t",
             quote = FALSE, append = FALSE, na = "NA")
 
-mutationCL <- ("case_lists/cases_sequenced.txt")
+mutationCL <- ("cases_sequenced.txt")
 
 f <- file(mutationCL)
 writeLines(c(
-  "cancer_study_identifier: PST_PEDS_2020",
-  "stable_id: PST_PEDS_2020_sequenced",
+  "cancer_study_identifier: PHI_MM_2020",
+  "stable_id: PHI_MM_2020_sequenced",
   "case_list_name: Sequenced Tumors",
   "case_list_description: All Sequenced Tumors",
-  paste("case_list_ids: ", paste(unique(combined_mafs@data$Tumor_Sample_Barcode), collapse = '\t'))
+  paste("case_list_ids: ", paste(unique(peds_somatic_merged@data$Tumor_Sample_Barcode), collapse = '\t'))
   ), f
 )
 print('Mutation case list file completed.')
