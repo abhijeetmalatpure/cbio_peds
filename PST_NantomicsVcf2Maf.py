@@ -63,6 +63,8 @@ vcf_metadata.drop(44, axis=0, inplace=True)
 vcf_metadata.reset_index(inplace=True, drop=True)
 vcf_metadata['normal_id'] = ""
 vcf_metadata['tumor_id'] = ""
+vcf_metadata['normal_tumor_rna'] = ""
+vcf_metadata['somatic_tumor_rna'] = ""
 
 logger.info(f'MAF files generated: {len(os.listdir(mafpath))}')
 
@@ -72,26 +74,38 @@ sema = threading.Semaphore(value=5)
 threads = list()
 
 def vcf2maf_call(vcf_filename, sample_id, vcf_type):
-    print(vcf_filename)
+    #print(vcf_filename)
     sema.acquire()
     tmpdir = join(tmppath, ("MG_" + sample_id.split('-')[0]), vcf_type)
     os.makedirs(tmpdir, exist_ok=True)
 
     with gzip.open(vcf_filename, mode='rt') as vcf:
         vcf_extract = open(join(tmpdir, vcf_type + '.vcf'), 'wt')
+        all_files_done = 0
+        tumor_rna = ""
         for line in vcf:
             vcf_extract.write(line)
             if line.startswith('##SAMPLE=<ID=NORMAL,'):
                 # print(line)
                 normal_id = dict(item.split('=') for item in line[line.find('<') + 1:line.find('>')].replace("\"", '').split(','))['File'].split('.')[0]
+                all_files_done+=1
             if line.startswith('##SAMPLE=<ID=TUMOR,'):
                 # print(line)
                 tumor_id = dict(item.split('=') for item in line[line.find('<') + 1:line.find('>')].replace("\"", '').split(','))['File'].split('.')[0]
+                all_files_done += 1
+            if line.startswith('##SAMPLE=<ID=TUMOR_RNA,'):
+                logger.info(line)
+                tumor_rna = dict(item.split('=') for item in line[line.find('<') + 1:line.find('>')].replace("\"", '').replace("[", '').replace("'", '').split(','))['File'].split('.')[0]
+                all_files_done += 1
+            if all_files_done == 3:
+                break
 
         if vcf_type == 'somatic':
             vcf_metadata.loc[vcf_metadata.Somatic == vcf_filename, 'tumor_id'] = tumor_id
+            vcf_metadata.loc[vcf_metadata.Somatic == vcf_filename, 'somatic_tumor_rna'] = tumor_rna
         else:
             vcf_metadata.loc[vcf_metadata.Germline == vcf_filename, 'normal_id'] = normal_id
+            vcf_metadata.loc[vcf_metadata.Germline == vcf_filename, 'normal_tumor_rna'] = tumor_rna
         vcf_extract.close()
 
     # maf_file = join(mafpath, sample_id + '.' + vcf_type + '.maf')
@@ -152,6 +166,6 @@ for index, row in vcf_metadata.iterrows():
 for thread in threads:
     threading.Thread.join(thread)
 
-vcf_metadata.to_csv(os.path.join(mafpath, "vcf_metadata_" + run + ".csv"), sep="\t")
+vcf_metadata.to_csv(os.path.join(mafpath, "peds_vcf_metadata.csv"), sep=",")
 
 logger.info("PEDS Nantomics completed.")

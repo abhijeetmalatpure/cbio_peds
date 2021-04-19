@@ -11,6 +11,7 @@ import threading
 import gzip
 import glob
 logger = None
+from shutil import copyfile
 
 # Create log directory
 if not os.path.isdir('log'):
@@ -25,25 +26,19 @@ logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(message)s", filename=log_filename)
 logger = logging.getLogger()
 
-print(f"Starting download on {socket.gethostname()} with process ID: {os.getpid()}")
+print(f"Process: {socket.gethostname()} with process ID: {os.getpid()}")
 
-# Read vcf metadata file into memory
-vcf_metadata: pd.DataFrame = pd.read_csv('/N/project/phi_ri/cmg_dev_ri/germline_cmg_saliva_join_vcfs/mm_cmg_vcf_germline_files.csv', delimiter='|',
-                           names=['vendor', 'sample_id', 'filename', 'patient_id', 'disease', 'uuid']).astype(str)
+rsem_root = '/N/project/phi_ingest_nantomics/nantomics/nant/peds/pst-files-per-patient'
+tmppath = "/N/project/phi_asha_archive/peds_pst/nantomics/tmp"
+rsempath = "/N/project/phi_asha_archive/peds_pst/nantomics/rsem"
+annotatedpath = "/N/project/phi_asha_archive/peds_pst/nantomics/rsem/annotated2"
 
-peds_metadata = pd.read_csv('/N/project/phi_ri/nantomics/peds_matching/Riley_Research_Report_UUIDs_sorted_by_contrast.tsv', delimiter='|', header = None)
-peds_metadata.columns = peds_metadata.iloc[44]
-peds_metadata['rsemFile'] = ''
+[os.makedirs(path, exist_ok=True) for path in [tmppath, rsempath, annotatedpath]]
 
-for index, row in peds_metadata.iterrows():
-    for name in glob.glob('/N/project/phi_ingest_nantomics/nantomics/nant/peds/pst-files-per-patient/*/BAM/*' + row['ReportUUID'] + '*rsem.txt.gz'):
-        print(name)
-        peds_metadata.iloc[index]['rsemFile'] = name
-
+rsem_combined = "rsem_combined_2.csv"
 
 run = str(int(time.mktime(datetime.datetime.now().timetuple())))
 
-rsem_root = '/N/project/phi_ingest_nantomics/nantomics/nant/peds/pst-files-per-patient'
 sema = threading.Semaphore(value=5)
 threads = list()
 
@@ -57,36 +52,59 @@ os.environ['PATH'] = libraries['path']
 os.environ['_LMFILES_'] = libraries['lmfiles']
 os.environ['LD_LIBRARY_PATH'] = libraries['ld_library_path']
 
-toolspath = join(expanduser("~"), "cbio_tools", "vcf2maf")
-rsempath = "/N/project/phi_asha_archive/peds_pst/nantomics/tmp"
-tmppath = "/N/project/phi_asha_archive/peds_pst/foundation/tmp"
+rsem_colnames = ["transcript","chromosome", "Strand", "transcript_start", "transcript_end",
+                 "CDS_start", "CDS_end", "exon_number", "exon_start_positions", "exon_end_positions",
+                 "gene_id", "transcript2", "protein_coding", "length", "effective_length", "expected_count",
+                 "TPM", "FPKM", "IsoPct", "pme_expected_count", "pme_TPM", "pme_FPKM", "sample_id"]
 
-[os.makedirs(path, exist_ok=True) for path in [rsempath]]
+def combine_rsem_files():
+    combined_file = os.path.join(rsempath, rsem_combined)
+    # if os.path.isfile(combined_file):
+    #    return pd.read_csv(combined_file, delimiter=",")
 
-logger.info(f'Enhanced MAF files before processing: {len(os.listdir(rsempath))}')
+    # Read vcf metadata file into memory
+    vcf_metadata: pd.DataFrame = pd.read_csv('/N/project/phi_asha_archive/peds_pst/nantomics/vcf2mafConversion/maf/peds_vcf_metadata.csv', delimiter=',', header=0)
+
+    peds_metadata = pd.read_csv('/N/project/phi_ri/nantomics/peds_matching/Riley_Research_Report_UUIDs_sorted_by_contrast.tsv', delimiter='|', header = None)
+    peds_metadata.columns = peds_metadata.iloc[44]
+    vcf_metadata['rsem'] = ''
+
+    for index, row in vcf_metadata.iterrows():
+        if isinstance(row.somatic_tumor_rna, str):
+            for name in glob.glob('/N/project/phi_ingest_nantomics/nantomics/nant/peds/pst-files-per-patient/*/BAM/*' + row['somatic_tumor_rna'] + '*.rsem.txt.gz'):
+                # print(name)
+                vcf_metadata.loc[index, 'rsem'] = name
+
+    vcf_metadata.dropna(axis=0, subset=['somatic_tumor_rna'], inplace=True)
+
+    [os.makedirs(path, exist_ok=True) for path in [rsempath]]
+
+    # vcf_metadata['rsem_filename'] = vcf_metadata['rsem'].str.split('/')[-1]
+
+    nant_rsem = pd.DataFrame(data={}, columns=rsem_colnames)
+
+    for index, row in vcf_metadata.iterrows():
+        fname = row.rsem.split('/')[-1][0:-3]
+        row.rsem_filename = os.path.join(rsempath, fname)
+        temp_rsem = pd.read_csv(row.rsem_filename, sep="\t")
+        temp_rsem.columns = nant_rsem.columns[:-1]
+
+        #print(temp_rsem.head(10))
+
+        # Save a copy with
+        temp_rsem.to_csv(os.path.join(annotatedpath, fname),
+                         sep="\t", header=True, index=False)
+
+        temp_rsem["sample_id"] = row.tumor_id
+        nant_rsem = nant_rsem.append(temp_rsem, ignore_index=True)
+
+        if not os.path.isfile(os.path.join(rsempath, fname)):
+            copyfile(row.rsem, os.path.join(rsempath, fname))
 
 
-def extract_rnaseq(vcf_filename, sample_id, vcf_type):
-    print(vcf_filename)
-    sema.acquire()
-    tmpdir = join(tmppath, ("MG_" + sample_id.split('-')[0]), vcf_type)
-    os.makedirs(tmpdir, exist_ok=True)
-    with gzip.open(vcf_filename, mode='rt') as rsem:
-        rnaseq = open(join(tmpdir, vcf_type + '.vcf'), 'wt')
-        for line in rsem:
-            rnaseq.write(line)
-        rnaseq.close()
+    return nant_rsem
 
+nant_combined_rsem = combine_rsem_files()
 
-for index, row in vcf_metadata.iterrows():
-    germ = threading.Thread(target=extract_rnaseq, args=(row.Germline, row.ContrastUUID, 'germline'))
-    threads.append(germ)
-    germ.start()
-
-for thread in threads:
-    threading.Thread.join(thread)
-
-
-vcf_metadata.to_csv(os.path.join(rsempath, "vcf_metadata_" + run + ".csv"), sep="\t")
-
-logger.info("PEDS Nantomics completed.")
+#nant_combined_rsem.to_csv(os.path.join(rsempath, "combined.rsem"), index=False, header=True, sep="\t")
+logger.info("PEDS Nantomics RSEM completed.")

@@ -73,8 +73,7 @@ if(unique(death$V2) == 'DECEASED') {
 
 
 # Write patients table to file
-write.table(patient, "data_clinical_patient_formatted.txt", sep="\t", col.names = FALSE, row.names = FALSE,
-            quote = FALSE, append = FALSE, na = "NA")
+write.table(patient, "data_clinical_patient_formatted.txt", sep="\t", col.names = FALSE, row.names = FALSE, quote = FALSE, append = FALSE, na = "NA")
 
 
 # # This did not work.

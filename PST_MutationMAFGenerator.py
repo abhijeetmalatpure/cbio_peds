@@ -29,31 +29,14 @@ print(f"Starting download on {socket.gethostname()} with process ID: {os.getpid(
 # 3. Sample name found in vcf file
 # The output maf and enhanced maf will have names
 # filename.somatic.enhanced.vcf, filename.somatic.maf and filename.somatic.enhanced.maf (or germline)
-vcf_metadata = pd.DataFrame(columns=['filename', 'sample_id', 'normal', 'tumor', 'vcftype'])
+vcf_metadata = pd.DataFrame(columns=['filename', 'sample_id', 'normal', 'tumor', 'file_sample', 'vcftype'])
 vcfs = []
 header = []
 # Uncomment this and remove the other os.walk for processing all files
-# for root, dirs, files in os.walk("/N/slate/abhmalat/peds_pst/ashion/files/subjects"):
-#     for file in files:
-#         if file.endswith(".vcf") and root.split(sep)[-1] == 'normalized':
-#             vcftype = 'somatic' if file.endswith('somatic.vcf') else 'germline'
-#             with open(join(root, file), 'r') as content:
-#                 for line in content:
-#                     line = line.strip()
-#                     if line.startswith("#CHROM\t"):
-#                         filename = join(root, file)
-#                         tumor = file.split('.')[0]
-#                         file_sample = line.split("\t")[-1]
-#                         normal = file_sample if vcftype == 'germline' else ''
-#                         vcf_metadata = vcf_metadata.append(pd.Series([filename, tumor, normal, tumor, vcftype],
-#                                                                      index=vcf_metadata.columns), ignore_index=True)
-#                         # vcfs.append([file, tumor, file_sample, vcftype])
-#                         break
-
-for root, dirs, files in os.walk("/N/slate/abhmalat/peds_pst/foundation/files"):
+for root, dirs, files in os.walk("/N/u/abhmalat/Carbonate/slate/peds_pst/ashion/files/subjects"):
     for file in files:
-        if file.endswith(".vcf"):
-            vcftype = 'somatic'# if file.endswith('somatic.vcf') else 'germline'
+        if file.endswith(".vcf") and root.split(sep)[-1] == 'normalized':
+            vcftype = 'somatic' if file.endswith('somatic.vcf') else 'germline'
             with open(join(root, file), 'r') as content:
                 for line in content:
                     line = line.strip()
@@ -61,17 +44,36 @@ for root, dirs, files in os.walk("/N/slate/abhmalat/peds_pst/foundation/files"):
                         filename = join(root, file)
                         tumor = file.split('.')[0]
                         file_sample = line.split("\t")[-1]
-                        normal = 'NORMAL'
-                        vcf_metadata = vcf_metadata.append(pd.Series([filename, tumor, normal, file_sample, vcftype],
+                        normal = file_sample if vcftype == 'germline' else ''
+                        vcf_metadata = vcf_metadata.append(pd.Series([filename, tumor, normal, tumor, file_sample, vcftype],
                                                                      index=vcf_metadata.columns), ignore_index=True)
                         # vcfs.append([file, tumor, file_sample, vcftype])
                         break
+
+# for root, dirs, files in os.walk("/N/slate/abhmalat/peds_pst/foundation/files"):
+#     for file in files:
+#         if file.endswith(".vcf"):
+#             vcftype = 'somatic'# if file.endswith('somatic.vcf') else 'germline'
+#             with open(join(root, file), 'r') as content:
+#                 for line in content:
+#                     line = line.strip()
+#                     if line.startswith("#CHROM\t"):
+#                         filename = join(root, file)
+#                         tumor = file.split('.')[0]
+#                         file_sample = line.split("\t")[-1]
+#                         normal = 'NORMAL'
+#                         vcf_metadata = vcf_metadata.append(pd.Series([filename, tumor, normal, file_sample, vcftype],
+#                                                                      index=vcf_metadata.columns), ignore_index=True)
+#                         # vcfs.append([file, tumor, file_sample, vcftype])
+#                         break
 
 # Set somatic's normal id to it's germline counterpart's normal id
 vcf_metadata = pd.merge(vcf_metadata, vcf_metadata[['normal', 'tumor']].loc[vcf_metadata.vcftype == 'germline'],
                         how='left', left_on='tumor', right_on='tumor', suffixes=('', '_y'))
 vcf_metadata.normal.loc[vcf_metadata.vcftype == 'somatic'] = vcf_metadata.normal_y
 vcf_metadata.drop('normal_y', axis=1, inplace=True)
+
+vcf_metadata.to_csv(os.path.join('/N/project/phi_asha_archive/peds_pst/ashion/maf', "ashion_vcf_metadata.csv"), sep=",", index=False)
 
 # foi = ['C051_0040_032766_T1_K1ID2_ps20201022180611.germline.vcf',
 # 'C051_0037_031894_T1_K1ID2_ps20201014112210.germline.vcf',
@@ -132,11 +134,12 @@ os.environ['_LMFILES_'] = libraries['lmfiles']
 os.environ['LD_LIBRARY_PATH'] = libraries['ld_library_path']
 
 toolspath = join(expanduser("~"), "cbio_tools", "vcf2maf")
-vcfpath = "/N/slate/abhmalat/peds_pst/foundation/vcf2mafConversion/vcf"
-mafpath = "/N/slate/abhmalat/peds_pst/foundation/vcf2mafConversion/maf"
-enhancedpath = "/N/slate/abhmalat/peds_pst/foundation/vcf2mafConversion/enhanced"
+vcfpath = "/N/project/phi_asha_archive/peds_pst/ashion/vcf"
+mafpath = "/N/project/phi_asha_archive/peds_pst/ashion/maf"
+enhancedpath = "/N/project/phi_asha_archive/peds_pst/ashion/enhanced"
+tmppath = "/N/project/phi_asha_archive/peds_pst/ashion/tmp"
 
-[os.makedirs(path, exist_ok=True) for path in [vcfpath, mafpath, enhancedpath]]
+[os.makedirs(path, exist_ok=True) for path in [tmppath, vcfpath, mafpath, enhancedpath]]
 
 logger.info(f'Enhanced MAF files before processing: {len(os.listdir(enhancedpath))}')
 
@@ -147,8 +150,8 @@ for index, vcf in vcf_metadata.iterrows():
 
     run = str(int(time.mktime(datetime.datetime.now().timetuple())))
     #logger.info(f'Epoch: {run}, Sample: {vcf.sample_id}, Type: {vcf.vcftype}')
-    tmpdir['v2m'] = join(expanduser("~"), 'tmp', ("MG_" + vcf.sample_id), ("V2M_" + run))
-    tmpdir['m2m'] = join(expanduser("~"), 'tmp', ("MG_" + vcf.sample_id), ("M2M_" + run))
+    tmpdir['v2m'] = join(tmppath, ("MG_" + vcf.sample_id), ("V2M_" + run))
+    tmpdir['m2m'] = join(tmppath, ("MG_" + vcf.sample_id), ("M2M_" + run))
 
     # Create tmp directories
     [os.makedirs(tmp, exist_ok=True) for tmp in tmpdir.values()]
@@ -160,26 +163,24 @@ for index, vcf in vcf_metadata.iterrows():
 
     evcffile = join(vcfpath, (vcf.sample_id + '.' + vcf.vcftype + '.enhanced.vcf'))
     maffile = join(mafpath, (vcf.sample_id + '.' + vcf.vcftype + '.maf'))
-    enhancedfile = join(enhancedpath, (vcf.sample_id + '.' + vcf.vcftype + '.enhanced.maf'))
+#    enhancedfile = join(enhancedpath, (vcf.sample_id + '.' + vcf.vcftype + '.enhanced.maf'))
 
     if os.path.isfile(evcffile):
         os.unlink(evcffile)
     if os.path.isfile(maffile):
         os.unlink(maffile)
-    if os.path.isfile(enhancedfile):
-        os.unlink(enhancedfile)
+    # if os.path.isfile(enhancedfile):
+    #     os.unlink(enhancedfile)
 
-    if vcf.vcftype == 'somatic':
-        vcf_id, vcf_id_val, new_id, new_id_val = '--vcf-tumor-id', vcf.tumor, '--new-normal-id', vcf.normal
-    else:
-        vcf_id, vcf_id_val, new_id, new_id_val = '--vcf-normal-id', vcf.normal, '--new-tumor-id', vcf.tumor
+    vcf_id = '--vcf-tumor-id' if vcf.vcftype == 'somatic' else '--vcf-normal-id'
 
     vcf2vcf = [
         'perl', join(toolspath, 'vcf2vcf.pl'),
         '--input-vcf', vcf.filename,
         '--output-vcf', evcffile,
-        vcf_id, vcf_id_val,
-        new_id, new_id_val,
+        vcf_id, vcf.file_sample,
+        '--new-normal-id', vcf.normal,
+        '--new-tumor-id', vcf.tumor,
         '--ref-fasta',
         join(expanduser("~"),
              '.vep/homo_sapiens/102_GRCh37/Homo_sapiens.GRCh37.75.dna.primary_assembly.fa.gz')]
@@ -202,28 +203,28 @@ for index, vcf in vcf_metadata.iterrows():
              '.vep/homo_sapiens/102_GRCh37/Homo_sapiens.GRCh37.75.dna.primary_assembly.fa.gz')
     ]
 
-    maf2maf = [
-        'perl', join(toolspath, 'maf2maf.pl'),
-        '--input-maf', maffile,
-        '--output-maf', enhancedfile,
-        '--vep-path', join(toolspath, 'vep_hg19'),
-        '--vep-data', join(expanduser("~"), '.vep'),
-        '--vep-forks', '5',
-        '--tmp-dir', tmpdir['m2m'],
-        '--ncbi-build', 'GRCh37',
-        '--ref-fasta',
-        join(expanduser("~"),
-             '.vep/homo_sapiens/102_GRCh37/Homo_sapiens.GRCh37.75.dna.primary_assembly.fa.gz')
-    ]
+    # maf2maf = [
+    #     'perl', join(toolspath, 'maf2maf.pl'),
+    #     '--input-maf', maffile,
+    #     '--output-maf', enhancedfile,
+    #     '--vep-path', join(toolspath, 'vep_hg19'),
+    #     '--vep-data', join(expanduser("~"), '.vep'),
+    #     '--vep-forks', '5',
+    #     '--tmp-dir', tmpdir['m2m'],
+    #     '--ncbi-build', 'GRCh37',
+    #     '--ref-fasta',
+    #     join(expanduser("~"),
+    #          '.vep/homo_sapiens/102_GRCh37/Homo_sapiens.GRCh37.75.dna.primary_assembly.fa.gz')
+    # ]
 
     print("VCF2VCF: " + ' '.join(vcf2vcf))
     print("VCF2MAF: " + ' '.join(vcf2maf))
-    print("MAF2MAF: " + ' '.join(maf2maf))
-    continue
+    # print("MAF2MAF: " + ' '.join(maf2maf))
+    #continue
 
     logger.info("VCF2VCF: " + ' '.join(vcf2vcf))
     logger.info("VCF2MAF: " + ' '.join(vcf2maf))
-    logger.info("MAF2MAF: " + ' '.join(maf2maf))
+    # logger.info("MAF2MAF: " + ' '.join(maf2maf))
 
     subprocess.call(vcf2vcf)
 
@@ -233,14 +234,14 @@ for index, vcf in vcf_metadata.iterrows():
 
         if os.path.isfile(maffile):
             logger.info(f"VCF2MAF succeeded. {maffile} exists!")
-            subprocess.call(maf2maf)
-
-            if os.path.isfile(enhancedfile):
-                logger.info(f"MAF2MAF succeeded. {enhancedfile} exists!")
-                success += 1
-            else:
-                logger.info(
-                    f"MAF2MAF FAILED FOR {maffile}")
+            success += 1
+            # subprocess.call(maf2maf)
+            #
+            # if os.path.isfile(enhancedfile):
+            #     logger.info(f"MAF2MAF succeeded. {enhancedfile} exists!")
+            # else:
+            #     logger.info(
+            #         f"MAF2MAF FAILED FOR {maffile}")
         else:
             logger.info(
                 f"VCF2MAF FAILED FOR {evcffile}")
@@ -248,7 +249,7 @@ for index, vcf in vcf_metadata.iterrows():
         logger.info(
             f"VCF2VCF FAILED FOR {vcf.filename}")
 
-logger.info(f'Enhanced MAF files found: {len(os.listdir(enhancedpath))}. Success: {success}')  # {success}')
+logger.info(f'MAF files found: {len(os.listdir(mafpath))}. Success: {success}')  # {success}')
 for root, dirs, files in os.walk(enhancedpath):
     for file in files:
         logger.info(file)

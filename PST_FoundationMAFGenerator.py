@@ -63,7 +63,7 @@ os.environ['_LMFILES_'] = libraries['lmfiles']
 os.environ['LD_LIBRARY_PATH'] = libraries['ld_library_path']
 
 toolspath = join(expanduser("~"), "cbio_tools", "vcf2maf")
-mafpath = "/N/project/phi_asha_archive/peds_pst/foundation/maf/somatic"
+mafpath = "/N/project/phi_asha_archive/peds_pst/foundation/maf2/somatic"
 #enhancedpath = "/N/slate/abhmalat/peds_pst/foundation/vcf2mafConversion/enhanced"
 tmppath = "/N/project/phi_asha_archive/peds_pst/foundation/tmp"
 

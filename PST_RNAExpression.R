@@ -1,6 +1,5 @@
 library(dplyr)
 library(biomaRt)
-library(tidyr)
 library(stringr)
 library(data.table)
 
