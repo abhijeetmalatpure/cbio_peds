@@ -31,9 +31,11 @@ get_sample <- function (x) {
   return(metadata[metadata$somatic_tumor_rna == rsem_file, "ContrastUUID"])
 }
 
+setwd("c:/Users/abhmalat/OneDrive - Indiana University/cBio_PEDS")
+
 metadata <- read.csv("data/nantomics/peds_vcf_metadata.csv", sep=',', header=TRUE, na.strings = "") %>%
-  dplyr::select(c("ContrastUUID", "somatic_tumor_rna"))  %>%
-  dplyr::filter(!is.na(somatic_tumor_rna))
+   dplyr::select(c("ContrastUUID","tumor_id", "somatic_tumor_rna"))  %>%
+   dplyr::filter(!is.na(somatic_tumor_rna))
 
 names(rsem_files)<- unlist(lapply(rsem_files, get_sample))
 
@@ -82,6 +84,42 @@ names(old_rna)[1] <- "Entrez_Gene_Id"
 new_rna <- full_join(old_rna, nant_rna_entrez, by = "Entrez_Gene_Id")
 
 write.table(as.data.frame(new_rna), "data_rna_expression_2.txt", sep="\t",
-             col.names = FALSE, row.names = FALSE, quote = FALSE, append = FALSE, na = "")
+             col.names = FALSE, row.names = FALSE, quote = FALSE, append = FALSE, na = "NA")
+
+
+# Update samples file
+samples <- read.csv("data_clinical_sample_formatted.txt", sep="\t", header = F)
+
+metadata <- left_join(metadata, samples[,c("V1", "V2")], by = c("tumor_id" = "V2"))
+colnames(metadata)[ncol(metadata)] <- "cbioportal_patient_id"
+
+write.table(as.data.frame(metadata), "data/nantomics/peds_vcf_metadata.csv", sep=",",
+             col.names = TRUE, row.names = FALSE, quote = FALSE, append = FALSE, na = "")
+
+
+mapping <- read.csv("data/nantomics/taylorde_peds_nantomics.csv", sep="|", header=TRUE)
+nant_mapping <- unique(mapping[,c("CBIOPORTAL_PATIENT_ID", "VENDOR_FILE_ID")])
+nant_mapping[,c("V3", "V4", "V5")] <- NA
+nant_mapping$V6 <- "NANTOMICS"
+names(nant_mapping)[c(1, 2)] <- c("V1", "V2")
+
+new_samples <- unique(rbindlist(list(samples, nant_samples), fill = TRUE))
+
+new_rna <- read.csv("data_rna_expression_2.txt", sep="\t", header=FALSE)
+nant_samples_missing <- as.data.frame(setdiff(paste(new_rna[1,]), paste(samples$V2))[-1])
+names(nant_samples_missing) <- "V2"
+nant_samples_missing <- left_join(nant_samples_missing,
+                                     metadata[!is.na(metadata$somatic_tumor_rna), c("ContrastUUID", "cbioportal_patient_id")],
+                                     by = c("V2" = "ContrastUUID"))
+names(nant_samples_missing)[2] <- "V1"
+nant_samples_missing[,c("V3", "V4", "V5")] <- NA
+nant_samples_missing$V6 <- "NANTOMICS"
+
+nant_samples_missing <- left_join(nant_samples_missing, nant_mapping, by = "V2")
+
+new_samples <- rbindlist(list(samples, nant_samples_missing), fill = TRUE)
+
+write.table(as.data.frame(new_samples), "data_clinical_sample_formatted.txt", sep="\t",
+            col.names = FALSE, row.names = FALSE, quote = FALSE, append = FALSE, na = "")
 
 print("RSEM incorporated into old rnaseq_expression file")
