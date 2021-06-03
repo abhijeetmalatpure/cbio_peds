@@ -12,15 +12,20 @@ setwd(dataset)
 # Read patients into memory
 patient <- read.csv("data_clinical_patient_ALL_PST.txt", sep = "\t", header = FALSE, na.strings = c("N/A", "", "unavailable"))
 
+old_patient <- read.csv("data_clinical_patient_formatted.txt", sep = "\t", header = FALSE, na.strings = c("N/A", "", "unavailable"))
+
 # Read samples into memory
 samples <- read.csv("data_clinical_sample_ALL_PST.txt", sep = "\t", header = FALSE, na.strings = c("N/A", "", "unavailable"))
 samples_unique <- unique(samples)
 
+old_samples <- read.csv("data_clinical_sample_formatted.txt", sep = "\t", header = FALSE, na.strings = c("N/A", "", "unavailable"))
+
 # Remove samples which have names that are too long
 samples_final <- samples_unique[str_length(samples_unique$V2) < 50, ]
 
+samples_final <- rbindlist(list(samples_final, old_samples %>% dplyr::filter(!(V2 %in% samples_final$V2))), fill = TRUE)
 #
-write.table(samples_final, "data_clinical_sample_formatted.txt", sep="\t", col.names = FALSE, row.names = FALSE,
+write.table(as.data.frame(samples_final), "data_clinical_sample_formatted.txt", sep="\t", col.names = FALSE, row.names = FALSE,
             quote = FALSE, append = FALSE, na = "NA")
 
 #write.table(samples_final, "data_clinical_sample_formatted.txt", sep="\t", col.names = FALSE, row.names = FALSE,
