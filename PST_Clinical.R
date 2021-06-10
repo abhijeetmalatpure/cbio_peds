@@ -28,6 +28,7 @@ samples_final <- rbindlist(list(samples_final, old_samples %>% dplyr::filter(!(V
 write.table(as.data.frame(samples_final), "data_clinical_sample_formatted.txt", sep="\t", col.names = FALSE, row.names = FALSE,
             quote = FALSE, append = FALSE, na = "NA")
 
+
 #write.table(samples_final, "data_clinical_sample_formatted.txt", sep="\t", col.names = FALSE, row.names = FALSE,
 #            quote = FALSE, append = FALSE, na = "NA")
 
